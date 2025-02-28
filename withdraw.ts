@@ -9,18 +9,14 @@ export function generateWithdrawCallData(
   withdrawAmount,
   depositCurrency: string
 ) {
-  console.log("CALLDATA PAYLOAD", {
-    userAddress: userAddress,
-    aaveAddress: aaveAddress,
-    withdrawAmount: withdrawAmount,
-    depositCurrency: depositCurrency,
-  });
-
   const abiCoder = ethers.AbiCoder.defaultAbiCoder();
-  const withdrawFunction =
-    "function withdraw(address asset, uint256 amount, address to)";
+  const ABI = [
+    "function withdraw(address asset, uint256 amount, address to) external returns (uint256)",
+  ];
 
-  const aaveInterface = new ethers.Interface([withdrawFunction]);
+  const aaveInterface = new ethers.Interface(ABI);
+
+  withdrawAmount = ethers.toBigInt(withdrawAmount);
 
   const withdrawCalldata = aaveInterface.encodeFunctionData("withdraw", [
     depositCurrency,
@@ -28,30 +24,7 @@ export function generateWithdrawCallData(
     userAddress,
   ]);
 
-  //instructions
-  const instructions = [
-    {
-      target: userAddress,
-      callData: withdrawCalldata,
-      value: 0,
-    },
-  ];
-
-  // return abiCoder.encode(
-  //   ["tuple(address target, bytes callData, uint256 value)[]", "address"],
-  //   [instructions, userAddress]
-  // );
-  return abiCoder.encode(
-    [
-      "tuple(tuple(address target, bytes callData, uint256 value)[] calls, address fallbackRecipient)",
-    ],
-    [
-      {
-        calls: instructions,
-        fallbackRecipient: userAddress,
-      },
-    ]
-  );
+  return withdrawCalldata;
 }
 
 async function withdrawUSDCFromAaveOnArbitrum() {
@@ -88,15 +61,31 @@ async function withdrawUSDCFromAaveOnArbitrum() {
       USDC_ADDRESS_ARBITRUM // Use Arbitrum USDC address for the deposit on Aave
     );
 
+    console.log("Generated CallData:", callData);
+
+    // TEST
+    // const ABI = [
+    //   "function withdraw(address asset, uint256 amount, address to) external returns (uint256)",
+    // ];
+    // const lendingPool = new ethers.Contract(AAVE_POOL_ADDRESS_ARBITRUM, ABI, wallet);
+    // const testCallData = lendingPool.interface.encodeFunctionData("withdraw", [
+    //   USDC_ADDRESS_ARBITRUM,
+    //   withdrawAmount,
+    //   userAddress,
+    // ]);
+    // console.log("Correct CallData:", testCallData);
+    // END TEST
+
     const feeData = await provider.getFeeData();
 
     // Create transaction with the final data
     const tx = {
       to: AAVE_POOL_ADDRESS_ARBITRUM,
+      from: wallet.address,
       data: callData,
       gasLimit: ethers.toBigInt(2000000),
       value: ethers.toBigInt(0), // Explicitly set to 0
-      chainId: parseInt(ARBITRUM_CHAIN_ID),
+      chainId: Number(ARBITRUM_CHAIN_ID),
       maxFeePerGas: feeData.maxFeePerGas
         ? ethers.toBigInt(Math.floor(Number(feeData.maxFeePerGas) * 1.3))
         : ethers.parseUnits("5", "gwei"),
@@ -114,6 +103,7 @@ async function withdrawUSDCFromAaveOnArbitrum() {
     }
 
     console.log("Transaction data:", {
+      from: tx.from,
       to: tx.to,
       value: tx.value.toString(),
       gasLimit: tx.gasLimit.toString(),

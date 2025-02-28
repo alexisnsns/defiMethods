@@ -2,7 +2,8 @@
   "name": "aavetest",
   "private": true,
   "scripts": {
-    "start": "node index.js",
+    "start": "node --loader ts-node/esm withdraw.ts",
+    "startbis": "node --loader ts-node/esm withdrawbis.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
