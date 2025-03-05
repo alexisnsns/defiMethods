@@ -48,7 +48,7 @@ async function withdrawUSDCFromAaveOnArbitrum() {
     console.log(`Connected with wallet address: ${userAddress}`);
 
     const decimals = 6; // USDC decimals
-    const withdrawAmountHuman = "0.5";
+    const withdrawAmountHuman = "0.485";
     const withdrawAmount = ethers.parseUnits(withdrawAmountHuman, decimals);
 
     // Generate initial message for fee estimation

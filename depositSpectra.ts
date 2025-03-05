@@ -1,4 +1,4 @@
-// DOES A DEPOSIT FROM BASE USDC TO ARB AAVE USDC VAULT
+// DOES A DEPOSIT FROM BASE USDC TO ARBITRUM SPECTRA USDC VAULT
 import { ethers } from "ethers";
 import fetch from "node-fetch";
 import dotenv from "dotenv";
@@ -19,30 +19,27 @@ const DELIMITER = "1dc0de";
 // Generate message for Multicall Handler
 function generateMessageForMulticallHandler(
   userAddress,
-  aaveAddress,
+  defiVaultAddress,
   depositAmount,
-  depositCurrency,
-  aaveReferralCode = 0
+  depositCurrency
 ) {
   const abiCoder = ethers.AbiCoder.defaultAbiCoder();
 
   // ABI
   const approveFunction = "function approve(address spender, uint256 value)";
-  const depositFunction =
-    "function supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode)";
-
+  const supplySpectraABI =
+    "function deposit(uint256 assets, address receiver) public returns (uint256 shares)";
   const erc20Interface = new ethers.Interface([approveFunction]);
-  const aaveInterface = new ethers.Interface([depositFunction]);
+  const defiInterface = new ethers.Interface([supplySpectraABI]);
 
   const approveCalldata = erc20Interface.encodeFunctionData("approve", [
-    aaveAddress,
+    defiVaultAddress,
     depositAmount,
   ]);
-  const depositCalldata = aaveInterface.encodeFunctionData("supply", [
-    depositCurrency,
+  const depositCalldata = defiInterface.encodeFunctionData("deposit", [
+    // depositCurrency,
     depositAmount,
     userAddress,
-    aaveReferralCode,
   ]);
 
   //instructions
@@ -53,7 +50,7 @@ function generateMessageForMulticallHandler(
       value: 0,
     },
     {
-      target: aaveAddress,
+      target: defiVaultAddress,
       callData: depositCalldata,
       value: 0,
     },
@@ -76,8 +73,8 @@ async function getSuggestedFees(
   inputToken,
   outputToken,
   inputAmount,
-  destinationChainId,
   originChainId,
+  destinationChainId,
   recipient,
   message
 ) {
@@ -115,19 +112,13 @@ async function getSuggestedFees(
   }
 }
 
-// Append unique identifier to calldata as requested by Across
-function appendIdentifierToCalldata(calldata) {
-  // Remove '0x' prefix, append delimiter + identifier, and add back the '0x' prefix
-  return calldata + DELIMITER + UNIQUE_IDENTIFIER;
-}
-
-async function depositUSDCToAaveOnArbitrum() {
+async function depositUSDCToSpectraOnArbitrum() {
   try {
     const {
       MNEMONIC,
       USDC_ADDRESS_BASE,
       USDC_ADDRESS_ARBITRUM,
-      AAVE_POOL_ADDRESS_ARBITRUM,
+      SPECTRA_VAULT_ADDRESS_ARBITRUM,
       ACROSS_SPOKEPOOL_ADDRESS_BASE,
       MULTICALL_HANDLER_ADDRESS,
       BASE_CHAIN_ID,
@@ -147,39 +138,41 @@ async function depositUSDCToAaveOnArbitrum() {
 
     console.log(`Connected with wallet address: ${userAddress}`);
 
-    const decimals = 6; // USDC decimals
-    console.log(`Using USDC with ${decimals} decimals`);
-
     const depositAmountHuman = "1";
-    const depositAmount = ethers.parseUnits(depositAmountHuman, decimals);
+    const depositAmount = ethers.parseUnits(depositAmountHuman, 6);
     const usdcContract = new ethers.Contract(
-      USDC_ADDRESS_BASE,
+      USDC_ADDRESS_BASE, // source token
       ERC20_ABI,
       wallet
     );
 
-    // Generate initial message for fee estimation
+    // // Generate initial message for fee estimation
     const initialMessage = generateMessageForMulticallHandler(
       userAddress,
-      AAVE_POOL_ADDRESS_ARBITRUM,
+      SPECTRA_VAULT_ADDRESS_ARBITRUM,
       depositAmount,
-      USDC_ADDRESS_ARBITRUM, // Use Arbitrum USDC address for the deposit on Aave
-      0 // referral code
+      USDC_ADDRESS_ARBITRUM // output token
     );
 
     console.log("Generated message for fee estimation:", initialMessage);
 
-    // Get suggested fees
+    // // Get suggested fees
     console.log("Getting suggested fees from Across API...");
-    const suggestedFees = await getSuggestedFees(
-      USDC_ADDRESS_BASE, // Input token on Base
-      USDC_ADDRESS_ARBITRUM, // Output token on Arbitrum
-      depositAmount,
-      parseInt(ARBITRUM_CHAIN_ID),
-      parseInt(BASE_CHAIN_ID),
-      MULTICALL_HANDLER_ADDRESS,
-      initialMessage
-    );
+
+    let suggestedFees = null;
+    try {
+      suggestedFees = await getSuggestedFees(
+        USDC_ADDRESS_BASE, // Input token
+        USDC_ADDRESS_ARBITRUM, // Output token
+        depositAmount,
+        parseInt(BASE_CHAIN_ID),
+        parseInt(ARBITRUM_CHAIN_ID),
+        MULTICALL_HANDLER_ADDRESS,
+        initialMessage
+      );
+    } catch (error) {
+      console.log("error in suggested fees", error);
+    }
 
     console.log(
       "Suggested fees received:",
@@ -188,13 +181,14 @@ async function depositUSDCToAaveOnArbitrum() {
     const outputAmount =
       depositAmount - ethers.toBigInt(suggestedFees.relayFeeTotal);
 
+    console.log("output amount is", outputAmount);
+
     // Generate the final message with the output amount
     const finalMessage = generateMessageForMulticallHandler(
       userAddress,
-      AAVE_POOL_ADDRESS_ARBITRUM,
+      SPECTRA_VAULT_ADDRESS_ARBITRUM,
       outputAmount, // Use output amount
-      USDC_ADDRESS_ARBITRUM, // Use Arbitrum USDC address for the deposit on Aave
-      0 // referral code
+      USDC_ADDRESS_ARBITRUM // Use arb USDC address for the deposit on spectra
     );
 
     console.log("Final message for deposit:", finalMessage);
@@ -278,7 +272,7 @@ async function depositUSDCToAaveOnArbitrum() {
       data: finalData,
       gasLimit: ethers.toBigInt(2000000),
       value: ethers.toBigInt(0), // Explicitly set to 0
-      chainId: parseInt(BASE_CHAIN_ID),
+      chainId: parseInt(BASE_CHAIN_ID), // origin chainID
       maxFeePerGas: feeData.maxFeePerGas
         ? ethers.toBigInt(Math.floor(Number(feeData.maxFeePerGas) * 1.3))
         : ethers.parseUnits("5", "gwei"),
@@ -290,6 +284,9 @@ async function depositUSDCToAaveOnArbitrum() {
       type: 2, // EIP-1559 transaction
     };
 
+    if (tx.maxPriorityFeePerGas > tx.maxFeePerGas) {
+      tx.maxPriorityFeePerGas = tx.maxFeePerGas;
+    }
     console.log("Transaction data:", {
       to: tx.to,
       value: tx.value.toString(),
@@ -311,4 +308,4 @@ async function depositUSDCToAaveOnArbitrum() {
   }
 }
 
-depositUSDCToAaveOnArbitrum();
+depositUSDCToSpectraOnArbitrum();
