@@ -3,6 +3,18 @@ import { ethers } from "ethers";
 import dotenv from "dotenv";
 dotenv.config();
 
+import {
+  USDC_ADDRESS_ARBITRUM,
+  ARBITRUM_CHAIN_ID,
+  BASE_CHAIN_ID,
+  BASE_RPC_URL,
+  USDC_ADDRESS_BASE,
+  ARBITRUM_RPC_URL,
+  CURVE_POOL_ADDRESS,
+  IBT_SPECTRA,
+  MORPHO_VAULT_ADDRESS_BASE,
+} from "./resources";
+
 export function generateWithdrawCallData(
   userAddress: string,
   withdrawAmount,
@@ -27,13 +39,7 @@ export function generateWithdrawCallData(
 
 async function withdrawUSDCFromAaveOnArbitrum() {
   try {
-    const {
-      MNEMONIC,
-      USDC_ADDRESS_BASE,
-      MORPHO_VAULT_ADDRESS_BASE,
-      BASE_CHAIN_ID,
-      BASE_RPC_URL,
-    } = process.env;
+    const { MNEMONIC } = process.env;
 
     const provider = new ethers.JsonRpcProvider(BASE_RPC_URL);
     const network = await provider.getNetwork();

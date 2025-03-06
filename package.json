@@ -6,7 +6,7 @@
     "wmorpho": "node --loader ts-node/esm withdrawMorpho.ts",
     "dspectra": "node --loader ts-node/esm depositSpectra.ts",
     "wspectra": "node --loader ts-node/esm withdrawSpectra.ts",
-    "startbis": "node --loader ts-node/esm withdrawbis.ts"
+    "scurve": "node --loader ts-node/esm curveswap.ts"
   },
   "dependencies": {
     "dotenv": "^16.3.1",

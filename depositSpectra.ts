@@ -4,54 +4,96 @@ import fetch from "node-fetch";
 import dotenv from "dotenv";
 dotenv.config();
 
-// ABI for ERC20 and Across Bridge
-const ERC20_ABI = [
-  "function approve(address spender, uint256 amount) external returns (bool)",
-  "function balanceOf(address) external view returns (uint256)",
-  "function decimals() external view returns (uint8)",
-  "function symbol() external view returns (string)",
-];
+import {
+  USDC_ADDRESS_ARBITRUM,
+  ARBITRUM_CHAIN_ID,
+  BASE_CHAIN_ID,
+  BASE_RPC_URL,
+  USDC_ADDRESS_BASE,
+  ARBITRUM_RPC_URL,
+  CURVE_POOL_ADDRESS,
+  IBT_SPECTRA,
+  ERC20_ABI,
+  DEPOSIT_V3_SELECTOR,
+  UNIQUE_IDENTIFIER,
+  DELIMITER,
+  ACROSS_SPOKEPOOL_ADDRESS_ARBITRUM,
+  ACROSS_SPOKEPOOL_ADDRESS_BASE,
+  MORPHO_VAULT_ADDRESS_BASE,
+  MULTICALL_HANDLER_ADDRESS,
+  AAVE_POOL_ADDRESS_ARBITRUM,
+  PT_TOKEN_SPECTRA,
+} from "./resources";
 
-const DEPOSIT_V3_SELECTOR = "0x7b939232";
-const UNIQUE_IDENTIFIER = "f001";
-const DELIMITER = "1dc0de";
+const { MNEMONIC } = process.env;
 
 // Generate message for Multicall Handler
 function generateMessageForMulticallHandler(
   userAddress,
-  defiVaultAddress,
+  ibtaddress,
   depositAmount,
-  depositCurrency
+  usdcarb
 ) {
   const abiCoder = ethers.AbiCoder.defaultAbiCoder();
 
-  // ABI
+  // APPROVE
   const approveFunction = "function approve(address spender, uint256 value)";
-  const supplySpectraABI =
-    "function deposit(uint256 assets, address receiver) public returns (uint256 shares)";
   const erc20Interface = new ethers.Interface([approveFunction]);
-  const defiInterface = new ethers.Interface([supplySpectraABI]);
-
+  // approve to get IBT token
   const approveCalldata = erc20Interface.encodeFunctionData("approve", [
-    defiVaultAddress,
+    ibtaddress,
     depositAmount,
   ]);
+
+  // approve to pool to swap the IBT token
+  const approveIBTCalldata = erc20Interface.encodeFunctionData("approve", [
+    CURVE_POOL_ADDRESS,
+    depositAmount,
+  ]);
+
+  // get the IBT token
+  const supplySpectraABI =
+    "function deposit(uint256 assets, address receiver) public returns (uint256 shares)";
+  const defiInterface = new ethers.Interface([supplySpectraABI]);
   const depositCalldata = defiInterface.encodeFunctionData("deposit", [
-    // depositCurrency,
     depositAmount,
     userAddress,
   ]);
 
+  const CURVE_POOL_ABI =
+    "function exchange(uint256 i, uint256 j, uint256 dx, uint256 min_dy) external payable returns (uint256)";
+  const curveInterface = new ethers.Interface([CURVE_POOL_ABI]);
+  const depositIBTCalldata = curveInterface.encodeFunctionData("exchange", [
+    0,
+    1,
+    "500000",
+    0,
+  ]);
+
   //instructions
   const instructions = [
+    // APPROVE USDC TOKEN
     {
-      target: depositCurrency,
+      target: usdcarb,
       callData: approveCalldata,
       value: 0,
     },
+    // GET IBT TOKEN
     {
-      target: defiVaultAddress,
+      target: ibtaddress,
       callData: depositCalldata,
+      value: 0,
+    },
+    // APPROVE IBT
+    {
+      target: ibtaddress,
+      callData: approveIBTCalldata,
+      value: 0,
+    },
+    // DEPOSIT IBT
+    {
+      target: CURVE_POOL_ADDRESS,
+      callData: depositIBTCalldata,
       value: 0,
     },
   ];
@@ -114,19 +156,8 @@ async function getSuggestedFees(
 
 async function depositUSDCToSpectraOnArbitrum() {
   try {
-    const {
-      MNEMONIC,
-      USDC_ADDRESS_BASE,
-      USDC_ADDRESS_ARBITRUM,
-      SPECTRA_VAULT_ADDRESS_ARBITRUM,
-      ACROSS_SPOKEPOOL_ADDRESS_BASE,
-      MULTICALL_HANDLER_ADDRESS,
-      BASE_CHAIN_ID,
-      ARBITRUM_CHAIN_ID,
-      BASE_RPC_URL,
-    } = process.env;
-
     const provider = new ethers.JsonRpcProvider(BASE_RPC_URL);
+
     const network = await provider.getNetwork();
     console.log("Connected to network:", {
       chainId: network.chainId,
@@ -138,8 +169,8 @@ async function depositUSDCToSpectraOnArbitrum() {
 
     console.log(`Connected with wallet address: ${userAddress}`);
 
-    const depositAmountHuman = "1";
-    const depositAmount = ethers.parseUnits(depositAmountHuman, 6);
+    // input the amount in token units (=, 1, 2, 3 usdc...)
+    const depositAmount = ethers.parseUnits("1", 6);
     const usdcContract = new ethers.Contract(
       USDC_ADDRESS_BASE, // source token
       ERC20_ABI,
@@ -149,7 +180,7 @@ async function depositUSDCToSpectraOnArbitrum() {
     // // Generate initial message for fee estimation
     const initialMessage = generateMessageForMulticallHandler(
       userAddress,
-      SPECTRA_VAULT_ADDRESS_ARBITRUM,
+      IBT_SPECTRA,
       depositAmount,
       USDC_ADDRESS_ARBITRUM // output token
     );
@@ -186,7 +217,7 @@ async function depositUSDCToSpectraOnArbitrum() {
     // Generate the final message with the output amount
     const finalMessage = generateMessageForMulticallHandler(
       userAddress,
-      SPECTRA_VAULT_ADDRESS_ARBITRUM,
+      IBT_SPECTRA,
       outputAmount, // Use output amount
       USDC_ADDRESS_ARBITRUM // Use arb USDC address for the deposit on spectra
     );
@@ -309,3 +340,17 @@ async function depositUSDCToSpectraOnArbitrum() {
 }
 
 depositUSDCToSpectraOnArbitrum();
+
+async function checkAllowance() {
+  console.log("checking allowance");
+  const providerARB = new ethers.JsonRpcProvider(ARBITRUM_RPC_URL);
+
+  const ibtContract = new ethers.Contract(IBT_SPECTRA, ERC20_ABI, providerARB);
+  const allowance = await ibtContract.allowance(
+    MULTICALL_HANDLER_ADDRESS,
+    PT_TOKEN_SPECTRA
+  );
+  console.log("Allowance of IBT for PT_TOKEN_SPECTRA:", allowance.toString());
+}
+
+// checkAllowance();

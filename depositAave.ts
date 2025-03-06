@@ -3,18 +3,27 @@ import { ethers } from "ethers";
 import fetch from "node-fetch";
 import dotenv from "dotenv";
 dotenv.config();
+import {
+  USDC_ADDRESS_ARBITRUM,
+  ARBITRUM_CHAIN_ID,
+  BASE_CHAIN_ID,
+  BASE_RPC_URL,
+  USDC_ADDRESS_BASE,
+  ARBITRUM_RPC_URL,
+  CURVE_POOL_ADDRESS,
+  IBT_SPECTRA,
+  ERC20_ABI,
+  DEPOSIT_V3_SELECTOR,
+  UNIQUE_IDENTIFIER,
+  DELIMITER,
+  ACROSS_SPOKEPOOL_ADDRESS_ARBITRUM,
+  ACROSS_SPOKEPOOL_ADDRESS_BASE,
+  MORPHO_VAULT_ADDRESS_BASE,
+  MULTICALL_HANDLER_ADDRESS,
+  AAVE_POOL_ADDRESS_ARBITRUM
+} from "./resources";
 
-// ABI for ERC20 and Across Bridge
-const ERC20_ABI = [
-  "function approve(address spender, uint256 amount) external returns (bool)",
-  "function balanceOf(address) external view returns (uint256)",
-  "function decimals() external view returns (uint8)",
-  "function symbol() external view returns (string)",
-];
 
-const DEPOSIT_V3_SELECTOR = "0x7b939232";
-const UNIQUE_IDENTIFIER = "f001";
-const DELIMITER = "1dc0de";
 
 // Generate message for Multicall Handler
 function generateMessageForMulticallHandler(
@@ -123,17 +132,7 @@ function appendIdentifierToCalldata(calldata) {
 
 async function depositUSDCToAaveOnArbitrum() {
   try {
-    const {
-      MNEMONIC,
-      USDC_ADDRESS_BASE,
-      USDC_ADDRESS_ARBITRUM,
-      AAVE_POOL_ADDRESS_ARBITRUM,
-      ACROSS_SPOKEPOOL_ADDRESS_BASE,
-      MULTICALL_HANDLER_ADDRESS,
-      BASE_CHAIN_ID,
-      ARBITRUM_CHAIN_ID,
-      BASE_RPC_URL,
-    } = process.env;
+    const { MNEMONIC } = process.env;
 
     const provider = new ethers.JsonRpcProvider(BASE_RPC_URL);
     const network = await provider.getNetwork();

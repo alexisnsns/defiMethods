@@ -1,7 +1,6 @@
+// SWAP IBT TO PT ON CURVE
 import { ethers } from "ethers";
-import fetch from "node-fetch";
 import dotenv from "dotenv";
-dotenv.config();
 import {
   USDC_ADDRESS_ARBITRUM,
   ARBITRUM_CHAIN_ID,
@@ -9,45 +8,38 @@ import {
   BASE_RPC_URL,
   USDC_ADDRESS_BASE,
   ARBITRUM_RPC_URL,
-  CURVE_POOL_ADDRESS,
-  IBT_SPECTRA,
-  ERC20_ABI,
-  DEPOSIT_V3_SELECTOR,
-  UNIQUE_IDENTIFIER,
-  DELIMITER,
-  ACROSS_SPOKEPOOL_ADDRESS_ARBITRUM,
-  ACROSS_SPOKEPOOL_ADDRESS_BASE,
-  MORPHO_VAULT_ADDRESS_BASE,
-  MULTICALL_HANDLER_ADDRESS,
-  AAVE_POOL_ADDRESS_ARBITRUM,
-  PT_TOKEN_SPECTRA,
+  CURVE_POOL_ADDRESS, 
+  IBT_SPECTRA
 } from "./resources";
+dotenv.config();
 
-export function generateWithdrawCallData(
+const ERC20_ABI = [
+  "function approve(address spender, uint256 amount) external returns (bool)",
+  "function balanceOf(address) external view returns (uint256)",
+  "function decimals() external view returns (uint8)",
+  "function symbol() external view returns (string)",
+  "function allowance(address owner, address spender) external view returns (uint256)",
+];
+
+export function generateSwapCallData(
   userAddress: string,
-  aaveAddress: string,
   withdrawAmount,
   depositCurrency: string
 ) {
-  const abiCoder = ethers.AbiCoder.defaultAbiCoder();
-  const ABI = [
-    "function withdraw(address asset, uint256 amount, address to) external returns (uint256)",
-  ];
+  const CURVE_POOL_ABI =
+    "function exchange(uint256 i, uint256 j, uint256 dx, uint256 min_dy) external payable returns (uint256)";
+  const curveInterface = new ethers.Interface([CURVE_POOL_ABI]);
 
-  const aaveInterface = new ethers.Interface(ABI);
-
-  withdrawAmount = ethers.toBigInt(withdrawAmount);
-
-  const withdrawCalldata = aaveInterface.encodeFunctionData("withdraw", [
-    depositCurrency,
-    withdrawAmount,
-    userAddress,
+  const swapIBTtoPTcallData = curveInterface.encodeFunctionData("exchange", [
+    0,
+    1,
+    "500000",
+    0,
   ]);
-
-  return withdrawCalldata;
+  return swapIBTtoPTcallData;
 }
 
-async function withdrawUSDCFromAaveOnArbitrum() {
+async function swapIBTtoPTonCurve() {
   try {
     const { MNEMONIC } = process.env;
 
@@ -63,38 +55,48 @@ async function withdrawUSDCFromAaveOnArbitrum() {
 
     console.log(`Connected with wallet address: ${userAddress}`);
 
+    const IBTaddress = new ethers.Contract(
+      IBT_SPECTRA, // source token
+      ERC20_ABI,
+      wallet
+    );
+
+    try {
+      const depositAmount = ethers.parseUnits("1", 6);
+
+      const approveTx = await IBTaddress.approve(
+        CURVE_POOL_ADDRESS,
+        depositAmount,
+        {
+          gasLimit: 300000, // Set a higher gas limit for the approval
+        }
+      );
+      console.log("Approval transaction submitted:", approveTx.hash);
+      await approveTx.wait();
+      console.log("Approval successful!");
+    } catch (error) {
+      console.error("Error approving IBT:", error);
+      throw new Error("Failed to approve IBT for Across Bridge");
+    }
+
     const decimals = 6; // USDC decimals
-    const withdrawAmountHuman = "0.5";
+    const withdrawAmountHuman = "0.485";
     const withdrawAmount = ethers.parseUnits(withdrawAmountHuman, decimals);
 
     // Generate initial message for fee estimation
-    const callData = generateWithdrawCallData(
+    const callData = generateSwapCallData(
       userAddress,
-      AAVE_POOL_ADDRESS_ARBITRUM,
       withdrawAmount,
-      USDC_ADDRESS_ARBITRUM // Use Arbitrum USDC address for the deposit on Aave
+      IBT_SPECTRA
     );
 
     console.log("Generated CallData:", callData);
-
-    // TEST
-    // const ABI = [
-    //   "function withdraw(address asset, uint256 amount, address to) external returns (uint256)",
-    // ];
-    // const lendingPool = new ethers.Contract(AAVE_POOL_ADDRESS_ARBITRUM, ABI, wallet);
-    // const testCallData = lendingPool.interface.encodeFunctionData("withdraw", [
-    //   USDC_ADDRESS_ARBITRUM,
-    //   withdrawAmount,
-    //   userAddress,
-    // ]);
-    // console.log("Correct CallData:", testCallData);
-    // END TEST
 
     const feeData = await provider.getFeeData();
 
     // Create transaction with the final data
     const tx = {
-      to: AAVE_POOL_ADDRESS_ARBITRUM,
+      to: CURVE_POOL_ADDRESS,
       from: wallet.address,
       data: callData,
       gasLimit: ethers.toBigInt(2000000),
@@ -138,4 +140,4 @@ async function withdrawUSDCFromAaveOnArbitrum() {
   }
 }
 
-withdrawUSDCFromAaveOnArbitrum();
+swapIBTtoPTonCurve();
