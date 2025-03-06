@@ -2,6 +2,9 @@
   "name": "aavetest",
   "private": true,
   "scripts": {
+    "testing": "node --loader ts-node/esm test.ts",
+    "daave": "node --loader ts-node/esm depositAave.ts",
+    "waave": "node --loader ts-node/esm withdrawAave.ts",
     "dmorpho": "node --loader ts-node/esm depositMorpho.ts",
     "wmorpho": "node --loader ts-node/esm withdrawMorpho.ts",
     "dspectra": "node --loader ts-node/esm depositSpectra.ts",

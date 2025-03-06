@@ -13,7 +13,7 @@ import {
   CURVE_POOL_ADDRESS,
   IBT_SPECTRA,
   MORPHO_VAULT_ADDRESS_BASE,
-} from "./resources";
+} from "./resources.js";
 
 export function generateWithdrawCallData(
   userAddress: string,
@@ -54,7 +54,7 @@ async function withdrawUSDCFromAaveOnArbitrum() {
     console.log(`Connected with wallet address: ${userAddress}`);
 
     const decimals = 6; // USDC decimals
-    const withdrawAmountHuman = "0.485";
+    const withdrawAmountHuman = "1";
     const withdrawAmount = ethers.parseUnits(withdrawAmountHuman, decimals);
 
     // Generate initial message for fee estimation

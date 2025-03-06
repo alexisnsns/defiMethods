@@ -23,7 +23,7 @@ import {
   MULTICALL_HANDLER_ADDRESS,
   AAVE_POOL_ADDRESS_ARBITRUM,
   PT_TOKEN_SPECTRA,
-} from "./resources";
+} from "./resources.js";
 
 const { MNEMONIC } = process.env;
 

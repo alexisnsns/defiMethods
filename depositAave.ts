@@ -20,10 +20,8 @@ import {
   ACROSS_SPOKEPOOL_ADDRESS_BASE,
   MORPHO_VAULT_ADDRESS_BASE,
   MULTICALL_HANDLER_ADDRESS,
-  AAVE_POOL_ADDRESS_ARBITRUM
-} from "./resources";
-
-
+  AAVE_POOL_ADDRESS_ARBITRUM,
+} from "./resources.js";
 
 // Generate message for Multicall Handler
 function generateMessageForMulticallHandler(

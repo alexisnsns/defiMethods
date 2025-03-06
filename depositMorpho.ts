@@ -21,7 +21,7 @@ import {
   ACROSS_SPOKEPOOL_ADDRESS_BASE,
   MORPHO_VAULT_ADDRESS_BASE,
   MULTICALL_HANDLER_ADDRESS,
-} from "./resources";
+} from "./resources.js";
 
 // Generate message for Multicall Handler
 function generateMessageForMulticallHandler(
