@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "testing": "node --loader ts-node/esm test.ts",
+    "aave": "node --loader ts-node/esm aaveAPYarb.ts",
     "daave": "node --loader ts-node/esm depositAave.ts",
     "waave": "node --loader ts-node/esm withdrawAave.ts",
     "dmorpho": "node --loader ts-node/esm depositMorpho.ts",
