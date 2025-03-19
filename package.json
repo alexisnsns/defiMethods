@@ -4,6 +4,7 @@
   "scripts": {
     "testing": "node --loader ts-node/esm test.ts",
     "aave": "node --loader ts-node/esm aaveAPYarb.ts",
+    "graph": "node --loader ts-node/esm graphBase.ts",
     "daave": "node --loader ts-node/esm depositAave.ts",
     "waave": "node --loader ts-node/esm withdrawAave.ts",
     "dmorpho": "node --loader ts-node/esm depositMorpho.ts",
@@ -13,6 +14,8 @@
     "scurve": "node --loader ts-node/esm curveswap.ts"
   },
   "dependencies": {
+    "axios": "^1.8.3",
+    "bignumber.js": "^9.1.2",
     "dotenv": "^16.3.1",
     "ethers": "^6.7.1",
     "node-fetch": "^3.3.2",
