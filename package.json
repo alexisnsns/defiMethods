@@ -4,6 +4,8 @@
   "scripts": {
     "testing": "node --loader ts-node/esm test.ts",
     "aave": "node --loader ts-node/esm aaveAPYarb.ts",
+    "umami": "node --loader ts-node/esm umami.ts",
+    "umamisingle": "node --loader ts-node/esm umamisingle.ts",
     "graph": "node --loader ts-node/esm graphBase.ts",
     "daave": "node --loader ts-node/esm depositAave.ts",
     "waave": "node --loader ts-node/esm withdrawAave.ts",
