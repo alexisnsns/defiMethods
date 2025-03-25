@@ -1,38 +1,69 @@
-// SWAP USDC TO ETH on CURVE
+// SWAP USDC TO ETH on UNISWAP
 import { ethers } from "ethers";
 import dotenv from "dotenv";
 import {
-  BASE_CHAIN_ID,
-  BASE_RPC_URL,
-  USDC_ADDRESS_BASE,
-  CURVE_USDC_POOL_ADDRESS,
+  ARBITRUM_CHAIN_ID,
+  ARBITRUM_RPC_URL,
+  USDC_ADDRESS_ARBITRUM,
+  UNISWAP_V3_POOL_ADDRESS,
+  WETH_ADDRESS_ARBITRUM,
+  UNISWAP_V3_UNIVERSAL_ROUTER,
   ERC20_ABI,
 } from "./resources.js";
 dotenv.config();
+import BigNumber from "bignumber.js";
 
 export function generateSwapCallData() {
-  const decimals = 6; // USDC decimals
-  const amount = "0.5";
-  const tokenAmount = ethers.parseUnits(amount, decimals);
+  const tokenAmount = new BigNumber("0.5").times(new BigNumber(10).pow(6)); // 0.5 USDC with 6 decimals
 
-  const CURVE_POOL_ABI =
-    "function exchange(uint256 i, uint256 j, uint256 dx, uint256 min_dy) external payable returns (uint256)";
-  const curveInterface = new ethers.Interface([CURVE_POOL_ABI]);
+  const UNISWAP_V3_ROUTER_ABI = [
+    "function execute(uint256,bytes[],bytes[]) external payable",
+  ];
 
-  const swapUSDCtoETHcallData = curveInterface.encodeFunctionData("exchange", [
-    0,
-    1,
-    tokenAmount,
-    0,
+  const routerInterface = new ethers.Interface(UNISWAP_V3_ROUTER_ABI);
+
+  // Path: USDC -> WETH
+  const slippageTolerance = 0.01; // 1% slippage tolerance
+  const amountOutMin = tokenAmount.times(new BigNumber(1 - slippageTolerance));
+
+  const params = [
+    USDC_ADDRESS_ARBITRUM, // tokenIn (USDC address)
+    WETH_ADDRESS_ARBITRUM, // tokenOut (WETH address)
+    500, // Fee tier (0.3%)
+    "0xe19c88086C8d551C81ff8a3e2c5DF87a88110a51", // recipient address
+    tokenAmount.toFixed(), // amountIn (USDC to swap)
+    amountOutMin.toFixed(), // amountOutMinimum (slippage adjusted)
+    0, // sqrtPriceLimitX96 (set to 0 for no price limit)
+  ];
+
+  // Encoding the exactInputSingle call data
+  const swapCallData = routerInterface.encodeFunctionData(
+    "exactInputSingle",
+    params
+  );
+
+  // Preparing the execute parameters
+  const commands = [swapCallData]; // Only one command in this case
+  const inputs = []; // No additional inputs for now
+
+  // You can set payableAmount to 0 if you are not sending Ether in the transaction
+  const payableAmount = ethers.parseEther("0.0");
+
+  // Encoding the execute function call
+  const executeCallData = routerInterface.encodeFunctionData("execute", [
+    payableAmount,
+    commands,
+    inputs,
   ]);
-  return swapUSDCtoETHcallData;
+
+  return executeCallData;
 }
 
-async function swapUSDCtoETHonCrv() {
+async function swapUSDCtoETHonUniswapV3() {
   try {
     const { MNEMONIC } = process.env;
 
-    const provider = new ethers.JsonRpcProvider(BASE_RPC_URL);
+    const provider = new ethers.JsonRpcProvider(ARBITRUM_RPC_URL);
     const network = await provider.getNetwork();
     console.log("Connected to network:", {
       chainId: network.chainId,
@@ -45,7 +76,7 @@ async function swapUSDCtoETHonCrv() {
     console.log(`Connected with wallet address: ${userAddress}`);
 
     const USDCaddress = new ethers.Contract(
-      USDC_ADDRESS_BASE, // source token
+      USDC_ADDRESS_ARBITRUM, // USDC token address
       ERC20_ABI,
       wallet
     );
@@ -54,7 +85,7 @@ async function swapUSDCtoETHonCrv() {
       const depositAmount = ethers.parseUnits("1", 6);
 
       const approveTx = await USDCaddress.approve(
-        CURVE_USDC_POOL_ADDRESS,
+        UNISWAP_V3_UNIVERSAL_ROUTER, // Uniswap V3 Router Address
         depositAmount,
         {
           gasLimit: 300000, // Set a higher gas limit for the approval
@@ -65,24 +96,24 @@ async function swapUSDCtoETHonCrv() {
       console.log("Approval successful!");
     } catch (error) {
       console.error("Error approving USDC:", error);
-      throw new Error("Failed to approve USDC for crv swap");
+      throw new Error("Failed to approve USDC for swap");
     }
 
-    // Generate initial message for fee estimation
+    // Generate the call data for the swap
     const callData = generateSwapCallData();
 
     console.log("Generated CallData:", callData);
 
     const feeData = await provider.getFeeData();
 
-    // Create transaction with the final data
+    // Create the transaction object with the final data
     const tx = {
-      to: CURVE_USDC_POOL_ADDRESS,
+      to: UNISWAP_V3_UNIVERSAL_ROUTER, // Uniswap V3 Router address
       from: wallet.address,
       data: callData,
       gasLimit: ethers.toBigInt(2000000),
-      value: ethers.toBigInt(0), // Explicitly set to 0
-      chainId: Number(BASE_CHAIN_ID),
+      value: ethers.toBigInt(0), // Explicitly set to 0 (no ETH needed for the swap)
+      chainId: Number(ARBITRUM_CHAIN_ID),
       maxFeePerGas: feeData.maxFeePerGas
         ? ethers.toBigInt(Math.floor(Number(feeData.maxFeePerGas) * 1.3))
         : ethers.parseUnits("5", "gwei"),
@@ -114,11 +145,11 @@ async function swapUSDCtoETHonCrv() {
     const depositTx = await wallet.sendTransaction(tx);
     console.log("Transaction hash:", depositTx.hash);
   } catch (error) {
-    console.error("Error in deposit process:", error);
+    console.error("Error in swap process:", error);
     if (error.stack) {
       console.error("Stack trace:", error.stack);
     }
   }
 }
 
-swapUSDCtoETHonCrv();
+swapUSDCtoETHonUniswapV3();
