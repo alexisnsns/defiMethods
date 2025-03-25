@@ -15,9 +15,25 @@ import {
 import dotenv from "dotenv";
 dotenv.config();
 
-const PARTNER = "chucknorrisv6";
 const SLIPPAGE = 1;
 const provider = new ethers.JsonRpcProvider(ARBITRUM_RPC_URL);
+
+// ERC20 ABI for approve + allowance
+const ERC20_ABI = [
+  "function approve(address spender, uint256 value) external returns (bool)",
+  "function allowance(address owner, address spender) external view returns (uint256)",
+  "function withdraw(uint256 amount) public",
+  "function balanceOf(address owner) view returns (uint256)",
+];
+
+const { MNEMONIC } = process.env;
+const wallet = new ethers.Wallet(MNEMONIC, provider);
+
+const wethContract = new ethers.Contract(
+  WETH_ADDRESS_ARBITRUM,
+  ERC20_ABI,
+  wallet
+);
 
 interface MinTokenData {
   decimals: number;
@@ -112,7 +128,7 @@ function createSwapper(networkID: number, apiURL?: string): Swapper {
     destToken,
     srcAmount,
     userAddress,
-    partner = PARTNER,
+    partner = "SBF",
   }) => {
     const priceRoute = await paraswap.swap.getRate({
       srcToken: srcToken.address,
@@ -165,6 +181,60 @@ interface GetSwapTxInput {
   receiver?: Address;
 }
 
+/**
+ * Ensures USDC approval for ParaSwap
+ */
+const ensureUSDCApproval = async () => {
+  // Swap amount (0.5 USDC)
+  const SWAP_AMOUNT_USDC = "0.5";
+  const SWAP_AMOUNT_WEI = ethers.parseUnits(SWAP_AMOUNT_USDC, 6);
+  const usdcContract = new ethers.Contract(
+    USDC_ADDRESS_ARBITRUM,
+    ERC20_ABI,
+    wallet
+  );
+
+  // Check allowance first
+  const currentAllowance = await usdcContract.allowance(
+    USER_ADDRESS,
+    PARASWAP_SPENDER_ADDRESS
+  );
+  if (BigNumber(currentAllowance.toString()).gte(SWAP_AMOUNT_WEI.toString())) {
+    console.log("✅ USDC already approved. Skipping approval.");
+    return;
+  }
+
+  console.log("🔄 Approving USDC for ParaSwap...");
+  const approveTx = await usdcContract.approve(
+    PARASWAP_SPENDER_ADDRESS,
+    SWAP_AMOUNT_WEI
+  );
+  await approveTx.wait();
+  console.log("✅ USDC approval confirmed:", approveTx.hash);
+};
+
+async function unwrapWETH() {
+  try {
+    // Get current WETH balance
+    const wethBalance = await wethContract.balanceOf(USER_ADDRESS);
+
+    if (wethBalance === 0n) {
+      console.log("No WETH to unwrap.");
+      return;
+    }
+
+    console.log(`Unwrapping ${ethers.formatEther(wethBalance)} WETH to ETH...`);
+
+    const tx = await wethContract.withdraw(wethBalance);
+    console.log("Transaction hash:", tx.hash);
+
+    await tx.wait(); // Wait for confirmation
+    console.log("WETH successfully unwrapped to ETH!");
+  } catch (error) {
+    console.error("Error unwrapping WETH:", error);
+  }
+}
+
 export async function getSwapTransaction({
   srcToken: srcTokenSymbol,
   destToken: destTokenSymbol,
@@ -212,7 +282,8 @@ export async function getSwapTransaction({
     throw error;
   }
 }
-export const getExampleSwapTransaction = async () => {
+
+export const swapUSDCtoETH = async () => {
   await ensureUSDCApproval();
   const callData = await getSwapTransaction({
     srcAmount: "0.5",
@@ -222,15 +293,13 @@ export const getExampleSwapTransaction = async () => {
     userAddress: USER_ADDRESS,
   });
 
-  console.log("🚀 Swap Call Data:", callData);
-
   const feeData = await provider.getFeeData();
 
   const tx = {
-    to: PARASWAP_SPENDER_ADDRESS, // Updated to the ParaSwap router address
+    to: PARASWAP_SPENDER_ADDRESS,
     data: callData.data,
     gasLimit: ethers.toBigInt(2000000),
-    value: ethers.toBigInt(0), // Explicitly set to 0 (no ETH involved)
+    value: ethers.toBigInt(0),
     chainId: parseInt(ARBITRUM_CHAIN_ID),
     maxFeePerGas: feeData.maxFeePerGas
       ? ethers.toBigInt(Math.floor(Number(feeData.maxFeePerGas) * 1.3))
@@ -238,7 +307,7 @@ export const getExampleSwapTransaction = async () => {
     maxPriorityFeePerGas: feeData.maxPriorityFeePerGas
       ? ethers.toBigInt(Math.floor(Number(feeData.maxPriorityFeePerGas) * 1.3))
       : ethers.parseUnits("1.5", "gwei"),
-    type: 2, // EIP-1559 transaction
+    type: 2,
   };
 
   if (tx.maxPriorityFeePerGas > tx.maxFeePerGas) {
@@ -257,48 +326,12 @@ export const getExampleSwapTransaction = async () => {
 
   const depositTx = await wallet.sendTransaction(tx);
   console.log("Transaction hash:", depositTx.hash);
+
+  // wait for confirmation
+  await depositTx.wait();
+  console.log("✅ Swap completed! Now unwrapping WETH...");
+
+  await unwrapWETH();
 };
 
-/**
- * Ensures USDC approval for ParaSwap
- */
-
-// ERC20 ABI for approve + allowance
-const ERC20_ABI = [
-  "function approve(address spender, uint256 value) external returns (bool)",
-  "function allowance(address owner, address spender) external view returns (uint256)",
-];
-
-const { MNEMONIC } = process.env;
-const wallet = new ethers.Wallet(MNEMONIC, provider);
-
-const ensureUSDCApproval = async () => {
-  // Swap amount (0.5 USDC)
-  const SWAP_AMOUNT_USDC = "0.5";
-  const SWAP_AMOUNT_WEI = ethers.parseUnits(SWAP_AMOUNT_USDC, 6);
-  const usdcContract = new ethers.Contract(
-    USDC_ADDRESS_ARBITRUM,
-    ERC20_ABI,
-    wallet
-  );
-
-  // Check allowance first
-  const currentAllowance = await usdcContract.allowance(
-    USER_ADDRESS,
-    PARASWAP_SPENDER_ADDRESS
-  );
-  if (BigNumber(currentAllowance.toString()).gte(SWAP_AMOUNT_WEI.toString())) {
-    console.log("✅ USDC already approved. Skipping approval.");
-    return;
-  }
-
-  console.log("🔄 Approving USDC for ParaSwap...");
-  const approveTx = await usdcContract.approve(
-    PARASWAP_SPENDER_ADDRESS,
-    SWAP_AMOUNT_WEI
-  );
-  await approveTx.wait();
-  console.log("✅ USDC approval confirmed:", approveTx.hash);
-};
-
-getExampleSwapTransaction();
+swapUSDCtoETH();
