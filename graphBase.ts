@@ -6,49 +6,57 @@ const ARBITRUM_URL = "Qmdn5hAZZj3wmWVuksXHtua3E6aWftCDeTFcW8YQ8Lu6pB";
 const POL_URL = "QmceoHP3ekxJ6JYqAXhqrVgv8rb9WXumrGe1ZhVZah8Ar5";
 const OP_URL = "QmScPH3aFxzFgrie8MMDU4QtFu3CE7nTfsRfSQXiccxBPh";
 
-const SUBGRAPH_URL = `https://api.thegraph.com/subgraphs/id/${ARBITRUM_URL}`;
+const UMAMI_URL = "QmaP6HkZfzgqVvdVkiRHNy6LJiuQTnkdWmMbuu3Red5J2s";
 
+const SUBGRAPH_URL = `https://api.thegraph.com/subgraphs/id/${UMAMI_URL}`;
 const fetchAPYData = async () => {
   try {
     console.log("Fetching data...");
 
     const query = `
     {
-      reserves(where: { symbol: "USDC" }) {
-        liquidityRate
-        reserveFactor
+      vaultTVLs(first: 5, where: { vault: "0x959f3807f0aa7921e18c78b00b2819ba91e52fef" }) {
+        id
+        vault
+        timestamp
+        tvl
       }
     }`;
 
     const response = await axios.post(SUBGRAPH_URL, { query });
-
-    const reserves = response.data.data.reserves;
-
-    if (reserves.length === 0) {
-      console.log("No data found for USDC pool.");
+    const data = response.data.data.vaultTVLs;
+    if (data.length < 2) {
+      console.error("Not enough data to calculate APY.");
       return;
     }
 
-    const pool = reserves[0];
-    console.log("Fetched data for pool:", pool);
+    // Sort snapshots by timestamp ascending (oldest first)
+    const sortedData = data.sort(
+      (a, b) => parseInt(a.timestamp) - parseInt(b.timestamp)
+    );
+    const initialTVL = parseInt(sortedData[0].tvl);
+    const finalTVL = parseInt(sortedData[sortedData.length - 1].tvl);
 
-    // Convert liquidityRate from 1e27 scale to a decimal rate
-    const liquidityRate = parseFloat(pool.liquidityRate) / 1e27;
+    // Calculate time difference (in seconds)
+    const timeDifference =
+      parseInt(sortedData[sortedData.length - 1].timestamp) -
+      parseInt(sortedData[0].timestamp);
 
-    const reserveFactorBps = parseFloat(pool.reserveFactor); 
-    const reserveFactor = reserveFactorBps / 10000; 
+    // Convert TVL from USDC (6 decimals)
+    const initialTVLInUSDC = initialTVL / 1e6;
+    const finalTVLInUSDC = finalTVL / 1e6;
 
-    const adjustedLiquidityRate = liquidityRate * (1 - reserveFactor);
-    const apy = (Math.pow(1 + adjustedLiquidityRate / 365, 365) - 1) * 100; 
+    // Calculate APY from TVL change
+    const growthFactor = finalTVLInUSDC / initialTVLInUSDC;
+    const apy =
+      (Math.pow(growthFactor, (365 * 24 * 60 * 60) / timeDifference) - 1) * 100;
 
-    console.log(`Liquidity Rate: ${liquidityRate}`);
-    console.log(`Reserve Factor: ${reserveFactor}`);
-    console.log(`Adjusted Liquidity Rate: ${adjustedLiquidityRate}`);
+    console.log(`Initial TVL: ${initialTVLInUSDC} USDC`);
+    console.log(`Final TVL: ${finalTVLInUSDC} USDC`);
     console.log(`Estimated APY: ${apy.toFixed(2)}%`);
   } catch (error) {
     console.error("Error fetching data:", error);
   }
 };
 
-// Run the function
 fetchAPYData();
