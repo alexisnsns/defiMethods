@@ -3,12 +3,17 @@ import { ethers } from "ethers";
 import fetch from "node-fetch";
 import dotenv from "dotenv";
 dotenv.config();
-
+import FACTORY_ABI from "./abis/factory.json" assert { type: "json" };
+import QUOTER_ABI from "./abis/quoter.json" assert { type: "json" };
+import SWAP_ROUTER_ABI from "./abis/swaprouter.json" assert { type: "json" };
+import POOL_ABI from "./abis/pool.json" assert { type: "json" };
+import TOKEN_IN_ABI from "./abis/weth.json" assert { type: "json" };
 import {
   USDC_ADDRESS_ARBITRUM,
   ARBITRUM_CHAIN_ID,
   BASE_CHAIN_ID,
   BASE_RPC_URL,
+  ARBITRUM_RPC_URL,
   USDC_ADDRESS_BASE,
   ERC20_ABI,
   DEPOSIT_V3_SELECTOR,
@@ -17,49 +22,96 @@ import {
   ACROSS_SPOKEPOOL_ADDRESS_BASE,
   MULTICALL_HANDLER_ADDRESS,
   UMAMI_WETH_VAULT_ADDRESS_ARB,
+  WETH_ADDRESS_ARBITRUM,
 } from "../resources.js";
 
+const baseProvider = new ethers.JsonRpcProvider(BASE_RPC_URL);
+const arbProvider = new ethers.JsonRpcProvider(ARBITRUM_RPC_URL);
+
+// UNISWAP V3 FACTORY
+const POOL_FACTORY_CONTRACT_ADDRESS =
+  "0x1F98431c8aD98523631AE4a59f267346ea31F984";
+// QUOTER V2
+const QUOTER_CONTRACT_ADDRESS = "0x61fFE014bA17989E743c5F6cB21bF9697530B21e";
+// swap router 02
 const SWAP_ROUTER_CONTRACT_ADDRESS =
   "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45";
 
+const factoryContract = new ethers.Contract(
+  POOL_FACTORY_CONTRACT_ADDRESS,
+  FACTORY_ABI,
+  arbProvider
+);
+const quoterContract = new ethers.Contract(
+  QUOTER_CONTRACT_ADDRESS,
+  QUOTER_ABI,
+  arbProvider
+);
+
+// Token Configuration
+const WETH = {
+  chainId: 42161,
+  address: WETH_ADDRESS_ARBITRUM,
+  decimals: 18,
+  symbol: "WETH",
+  name: "Wrapped Ether",
+  isToken: true,
+  isNative: true,
+  wrapped: true,
+};
+const USDC = {
+  chainId: 42161,
+  address: USDC_ADDRESS_ARBITRUM,
+  decimals: 6,
+  symbol: "USDC",
+  name: "USD//C",
+  isToken: true,
+  isNative: true,
+  wrapped: false,
+};
 // Generate message for Multicall Handler
 function generateMessageForMulticallHandler(
-  userAddress,
-  defiVaultAddress,
+  userAddress: string,
+  defiVaultAddress: string,
   depositAmount,
-  depositCurrency
+  depositCurrency,
+  callDataSwap: Object
 ) {
   const abiCoder = ethers.AbiCoder.defaultAbiCoder();
 
   // ABI
   const approveFunction = "function approve(address spender, uint256 value)";
-  const depositFunction =
-    "function deposit(uint256 assets, uint256 minOutAfterFees, address receiver) external returns (uint256 shares)";
+  //   const depositFunction =
+  //     "function deposit(uint256 assets, uint256 minOutAfterFees, address receiver) external returns (uint256 shares)";
 
   const erc20Interface = new ethers.Interface([approveFunction]);
-  const defiInterface = new ethers.Interface([depositFunction]);
+  //   const defiInterface = new ethers.Interface([depositFunction]);
+
+  const MAX_UINT256 = ethers.MaxUint256;
 
   const approveCalldata = erc20Interface.encodeFunctionData("approve", [
     defiVaultAddress,
-    depositAmount,
+    MAX_UINT256,
   ]);
 
-  const feeRate = BigInt(20); // 0.15% as basis points (15 / 10000)
-  const feeDenominator = BigInt(10000); // 100% = 10000 BPS
+  //   const feeRate = BigInt(20); // 0.15% as basis points (15 / 10000)
+  //   const feeDenominator = BigInt(10000); // 100% = 10000 BPS
 
-  const minOutAfterFees =
-    depositAmount - (depositAmount * feeRate) / feeDenominator;
+  //   const minOutAfterFees =
+  //     depositAmount - (depositAmount * feeRate) / feeDenominator;
 
-  console.log("Deposit Amount:", depositAmount.toString());
-  console.log("Min Out After Fees:", minOutAfterFees.toString());
+  //   console.log("Deposit Amount:", depositAmount.toString());
+  //   console.log("Min Out After Fees:", minOutAfterFees.toString());
 
-  const ethAmount = ethers.parseEther("0.0005");
+  //   const ethAmount = ethers.parseEther("0.0005");
 
-  const depositCalldata = defiInterface.encodeFunctionData("deposit", [
-    depositAmount,
-    minOutAfterFees,
-    userAddress,
-  ]);
+  //   const depositCalldata = defiInterface.encodeFunctionData("deposit", [
+  //     depositAmount,
+  //     minOutAfterFees,
+  //     userAddress,
+  //   ]);
+
+  console.log('here 3')
 
   //instructions
   const instructions = [
@@ -70,9 +122,14 @@ function generateMessageForMulticallHandler(
     },
     {
       target: defiVaultAddress,
-      callData: depositCalldata,
-      value: ethAmount,
+      callData: callDataSwap,
+      value: 0,
     },
+    // {
+    //   target: umamiaddress,
+    //   callData: depositCallData,
+    //   value: ethAmount,
+    // },
   ];
 
   return abiCoder.encode(
@@ -131,36 +188,142 @@ async function getSuggestedFees(
   }
 }
 
+// UNISWAP LOGIC
+async function getPoolInfo(factoryContract, tokenIn, tokenOut) {
+  const poolAddress = await factoryContract.getPool(
+    tokenIn.address,
+    tokenOut.address,
+    3000
+  );
+  if (!poolAddress) {
+    throw new Error("Failed to get pool address");
+  }
+  const poolContract = new ethers.Contract(poolAddress, POOL_ABI, arbProvider);
+  const [token0, token1, fee] = await Promise.all([
+    poolContract.token0(),
+    poolContract.token1(),
+    poolContract.fee(),
+  ]);
+  return { poolContract, token0, token1, fee };
+}
+
+// UNISWAP LOGIC
+async function quoteAndLogSwap(
+  quoterContract,
+  fee: bigint,
+  wallet,
+  amountIn: bigint
+) {
+  const quotedAmountOut = await quoterContract.quoteExactInputSingle.staticCall(
+    {
+      tokenIn: USDC.address,
+      tokenOut: WETH.address,
+      fee: fee,
+      recipient: wallet.address,
+      deadline: Math.floor(new Date().getTime() / 1000 + 60 * 10),
+      amountIn: amountIn,
+      sqrtPriceLimitX96: 0,
+    }
+  );
+  console.log(`-------------------------------`);
+  console.log(
+    `Token Swap will result in: ${ethers.formatUnits(
+      quotedAmountOut[0].toString(),
+      WETH.decimals
+    )} ${WETH.symbol} for ${ethers.formatUnits(
+      amountIn.toString(),
+      USDC.decimals
+    )} ${USDC.symbol}`
+  );
+  const amountOut = ethers.formatUnits(quotedAmountOut[0], WETH.decimals);
+  return amountOut;
+}
+
+// UNISWAP LOGIC
+async function prepareSwapParams(poolContract, wallet, amountIn, amountOut) {
+  return {
+    tokenIn: USDC.address,
+    tokenOut: WETH.address,
+    fee: await poolContract.fee(),
+    recipient: wallet.address,
+    amountIn: amountIn,
+    amountOutMinimum: amountOut,
+    sqrtPriceLimitX96: 0,
+  };
+}
+
+// UNISWAP LOGIC
+async function getSwapCallData(swapRouter, params) {
+  const transaction = await swapRouter.exactInputSingle.populateTransaction(
+    params
+  );
+
+  return transaction;
+}
+
 async function depositUSDCToUmamiOnArb() {
   console.log("start!");
   try {
     const { MNEMONIC } = process.env;
 
-    const provider = new ethers.JsonRpcProvider(BASE_RPC_URL);
-    const wallet = new ethers.Wallet(MNEMONIC, provider);
+    const wallet = new ethers.Wallet(MNEMONIC, baseProvider);
     const userAddress = await wallet.getAddress();
     console.log(`Connected with wallet address: ${userAddress}`);
 
     const decimals = 6; // USDC decimals
-    const depositAmountHuman = "1";
-    const depositAmount = ethers.parseUnits(depositAmountHuman, decimals);
+    const depositAmount = ethers.parseUnits("1", decimals);
+    const swapAmount = ethers.parseUnits("0.75", decimals);
     const usdcContract = new ethers.Contract(
       USDC_ADDRESS_BASE,
       ERC20_ABI,
       wallet
     );
 
+    const { poolContract, token0, token1, fee } = await getPoolInfo(
+      factoryContract,
+      USDC,
+      WETH
+    );
+    console.log(`-------------------------------`);
+    console.log(`Fetching Quote for: ${USDC.symbol} to ${WETH.symbol}`);
+    console.log(`-------------------------------`);
+    console.log(`Swap Amount: ${ethers.formatEther(depositAmount)}`);
+
+    
+    const quotedAmountOut = await quoteAndLogSwap(
+      quoterContract,
+      fee,
+      wallet,
+      swapAmount
+    );
+
+    const params = await prepareSwapParams(
+      poolContract,
+      wallet,
+      swapAmount,
+      quotedAmountOut[0].toString()
+    );
+    const swapRouter = new ethers.Contract(
+      SWAP_ROUTER_CONTRACT_ADDRESS,
+      SWAP_ROUTER_ABI,
+      wallet
+    );
+
+    const callDataSwap = await getSwapCallData(swapRouter, params);
+
     // Generate initial message for fee estimation
     const initialMessage = generateMessageForMulticallHandler(
       userAddress,
       SWAP_ROUTER_CONTRACT_ADDRESS,
       depositAmount,
-      USDC_ADDRESS_ARBITRUM // Use the deposit usdc address
+      USDC_ADDRESS_ARBITRUM, // Use the deposit usdc address,
+      callDataSwap.data
     );
+
 
     console.log("Generated message for fee estimation:", initialMessage);
 
-    // // Get suggested fees
+    // Get suggested fees
     console.log("Getting suggested fees from Across API...");
 
     let suggestedFees = null;
@@ -192,7 +355,8 @@ async function depositUSDCToUmamiOnArb() {
       userAddress,
       SWAP_ROUTER_CONTRACT_ADDRESS,
       outputAmount, // Use output amount
-      USDC_ADDRESS_ARBITRUM // Use arb USDC address for the deposit on umami
+      USDC_ADDRESS_ARBITRUM, // Use arb USDC address for the deposit on umami
+      callDataSwap.data
     );
 
     console.log("Final message for deposit:", finalMessage);
@@ -268,7 +432,7 @@ async function depositUSDCToUmamiOnArb() {
       "Data includes unique identifier:",
       DELIMITER + UNIQUE_IDENTIFIER
     );
-    const feeData = await provider.getFeeData();
+    const feeData = await baseProvider.getFeeData();
 
     // Create transaction with the final data
     const tx = {

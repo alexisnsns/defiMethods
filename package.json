@@ -6,7 +6,7 @@
     "aave": "node --loader ts-node/esm aaveAPYarb.ts",
     "umami": "node --loader ts-node/esm umami.ts",
     "umamisingle": "node --loader ts-node/esm umamisingle.ts",
-    "uniswap": "node --loader ts-node/esm uniswap.ts",
+    "uniswap": "node --loader ts-node/esm uniswap/uniswap.ts",
     "paraswap": "node --loader ts-node/esm paraswap.ts",
     "uniswapquote": "node --loader ts-node/esm uniswapquote.ts",
     "graph": "node --loader ts-node/esm graphBase.ts",
@@ -19,15 +19,12 @@
     "scurve": "node --loader ts-node/esm curveswap.ts"
   },
   "dependencies": {
-    "@paraswap/core": "^2.2.0",
-    "@paraswap/sdk": "^6.8.1",
     "@uniswap/sdk-core": "^7.7.2",
     "@uniswap/v3-sdk": "^3.25.2",
     "axios": "^1.8.3",
     "bignumber.js": "^9.1.2",
     "dotenv": "^16.3.1",
     "ethers": "^6.13.5",
-    "jsbi": "^3.2.5",
     "node-fetch": "^3.3.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.2"
