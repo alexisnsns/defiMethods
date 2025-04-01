@@ -75,7 +75,8 @@ function generateMessageForMulticallHandler(
   defiVaultAddress: string,
   depositAmount,
   depositCurrency,
-  callDataSwap: Object
+  callDataSwap: Object,
+  wethToUnwrap
 ) {
   const abiCoder = ethers.AbiCoder.defaultAbiCoder();
 
@@ -94,6 +95,14 @@ function generateMessageForMulticallHandler(
     MAX_UINT256,
   ]);
 
+  const wethWithdrawFunction = "function withdraw(uint256 amount)";
+  const wethInterface = new ethers.Interface([wethWithdrawFunction]);
+
+  const unwrapCalldata = wethInterface.encodeFunctionData("withdraw", [
+    wethToUnwrap,
+  ]);
+
+  console.log("wet to unwrap", wethToUnwrap);
   //   const feeRate = BigInt(20); // 0.15% as basis points (15 / 10000)
   //   const feeDenominator = BigInt(10000); // 100% = 10000 BPS
 
@@ -111,18 +120,24 @@ function generateMessageForMulticallHandler(
   //     userAddress,
   //   ]);
 
-  console.log('here 3')
-
   //instructions
   const instructions = [
+    // approve USDC ARB for swap
     {
       target: depositCurrency,
       callData: approveCalldata,
       value: 0,
     },
+    // swap USDC <> ETH on arb
     {
       target: defiVaultAddress,
       callData: callDataSwap,
+      value: 0,
+    },
+    // unwrap WETH<>ETH
+    {
+      target: WETH_ADDRESS_ARBITRUM,
+      callData: unwrapCalldata,
       value: 0,
     },
     // {
@@ -289,7 +304,6 @@ async function depositUSDCToUmamiOnArb() {
     console.log(`-------------------------------`);
     console.log(`Swap Amount: ${ethers.formatEther(depositAmount)}`);
 
-    
     const quotedAmountOut = await quoteAndLogSwap(
       quoterContract,
       fee,
@@ -303,6 +317,7 @@ async function depositUSDCToUmamiOnArb() {
       swapAmount,
       quotedAmountOut[0].toString()
     );
+    
     const swapRouter = new ethers.Contract(
       SWAP_ROUTER_CONTRACT_ADDRESS,
       SWAP_ROUTER_ABI,
@@ -310,6 +325,7 @@ async function depositUSDCToUmamiOnArb() {
     );
 
     const callDataSwap = await getSwapCallData(swapRouter, params);
+    const amountToUnwrap = ethers.parseUnits(quotedAmountOut, 18);
 
     // Generate initial message for fee estimation
     const initialMessage = generateMessageForMulticallHandler(
@@ -317,9 +333,9 @@ async function depositUSDCToUmamiOnArb() {
       SWAP_ROUTER_CONTRACT_ADDRESS,
       depositAmount,
       USDC_ADDRESS_ARBITRUM, // Use the deposit usdc address,
-      callDataSwap.data
+      callDataSwap.data,
+      amountToUnwrap
     );
-
 
     console.log("Generated message for fee estimation:", initialMessage);
 
@@ -356,7 +372,8 @@ async function depositUSDCToUmamiOnArb() {
       SWAP_ROUTER_CONTRACT_ADDRESS,
       outputAmount, // Use output amount
       USDC_ADDRESS_ARBITRUM, // Use arb USDC address for the deposit on umami
-      callDataSwap.data
+      callDataSwap.data,
+      amountToUnwrap
     );
 
     console.log("Final message for deposit:", finalMessage);
@@ -364,6 +381,7 @@ async function depositUSDCToUmamiOnArb() {
     // Approve USDC spending
     console.log("Approving USDC for Across Bridge...");
     try {
+      // UNCOMMENT
       const approveTx = await usdcContract.approve(
         ACROSS_SPOKEPOOL_ADDRESS_BASE,
         depositAmount,
@@ -466,6 +484,7 @@ async function depositUSDCToUmamiOnArb() {
 
     console.log("Sending transaction...");
 
+    // UNCOMMENT
     const depositTx = await wallet.sendTransaction(tx);
     console.log("Transaction hash:", depositTx.hash);
   } catch (error) {
