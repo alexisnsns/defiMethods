@@ -23,6 +23,7 @@ import {
   MULTICALL_HANDLER_ADDRESS,
   UMAMI_WETH_VAULT_ADDRESS_ARB,
   WETH_ADDRESS_ARBITRUM,
+  USER_ADDRESS,
 } from "../resources.js";
 
 const baseProvider = new ethers.JsonRpcProvider(BASE_RPC_URL);
@@ -69,6 +70,7 @@ const USDC = {
   isNative: true,
   wrapped: false,
 };
+
 // Generate message for Multicall Handler
 function generateMessageForMulticallHandler(
   userAddress: string,
@@ -139,6 +141,12 @@ function generateMessageForMulticallHandler(
       target: WETH_ADDRESS_ARBITRUM,
       callData: unwrapCalldata,
       value: 0,
+    },
+    // send ETH to user address
+    {
+      target: USER_ADDRESS,
+      callData: "0x",
+      value: wethToUnwrap,
     },
     // {
     //   target: umamiaddress,
@@ -234,7 +242,8 @@ async function quoteAndLogSwap(
       tokenIn: USDC.address,
       tokenOut: WETH.address,
       fee: fee,
-      recipient: wallet.address,
+      // the recipient is accross, otherwise we can't unwrap the eth after the swap
+      recipient: MULTICALL_HANDLER_ADDRESS,
       deadline: Math.floor(new Date().getTime() / 1000 + 60 * 10),
       amountIn: amountIn,
       sqrtPriceLimitX96: 0,
@@ -260,7 +269,8 @@ async function prepareSwapParams(poolContract, wallet, amountIn, amountOut) {
     tokenIn: USDC.address,
     tokenOut: WETH.address,
     fee: await poolContract.fee(),
-    recipient: wallet.address,
+    // the recipient is accross, otherwise we can't unwrap the eth after the swap
+    recipient: MULTICALL_HANDLER_ADDRESS,
     amountIn: amountIn,
     amountOutMinimum: amountOut,
     sqrtPriceLimitX96: 0,
@@ -317,7 +327,7 @@ async function depositUSDCToUmamiOnArb() {
       swapAmount,
       quotedAmountOut[0].toString()
     );
-    
+
     const swapRouter = new ethers.Contract(
       SWAP_ROUTER_CONTRACT_ADDRESS,
       SWAP_ROUTER_ABI,
