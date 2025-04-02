@@ -81,5 +81,39 @@ const fetchStablePools = async () => {
   }
 };
 
+const fetchHarvest = async () => {
+  try {
+    const response = await fetch("https://yields.llama.fi/pools");
+    const data = await response.json();
+
+    if (data.status !== "success") {
+      console.error("Failed to fetch data");
+      return;
+    }
+
+    const filteredPools = data.data.filter(
+      (pool: any) =>
+        ["Ethereum"].includes(pool.chain) &&
+        pool.project === "harvest-finance" &&
+        pool.symbol === "CBBTC" &&
+        pool.poolMeta === "Morpho - Seamless"
+    );
+    //   .map(({ project, chain, apy }) => ({
+    //     project,
+    //     chain,
+    //     apy: Number(apy).toFixed(2),
+    //   }))
+    //   .sort((a, b) => Number(b.apy) - Number(a.apy));
+
+    console.log("stable USDC pools by descending yield:");
+    console.log(filteredPools);
+    console.log("Number of pools matching the criteria:", filteredPools.length);
+  } catch (error) {
+    console.error("Error fetching data:", error);
+  }
+};
+
+// fetchHarvest();
+
 // fetchUSDCAavePools();
-fetchStablePools();
+// fetchStablePools();
