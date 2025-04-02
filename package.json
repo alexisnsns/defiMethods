@@ -16,7 +16,9 @@
     "wmorpho": "node --loader ts-node/esm withdrawMorpho.ts",
     "dspectra": "node --loader ts-node/esm depositSpectra.ts",
     "wspectra": "node --loader ts-node/esm withdrawSpectra.ts",
-    "scurve": "node --loader ts-node/esm curveswap.ts"
+    "scurve": "node --loader ts-node/esm curveswap.ts",
+    "yields": "node --loader ts-node/esm yields.ts"
+
   },
   "dependencies": {
     "@uniswap/sdk-core": "^7.7.2",
