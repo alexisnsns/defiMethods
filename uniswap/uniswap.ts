@@ -74,26 +74,32 @@ const USDC = {
 // Generate message for Multicall Handler
 function generateMessageForMulticallHandler(
   userAddress: string,
-  defiVaultAddress: string,
+  uniswapAddress: string,
   depositAmount,
   depositCurrency,
   callDataSwap: Object,
-  wethToUnwrap
+  wethToUnwrap,
+  umamiVaultAddress
 ) {
   const abiCoder = ethers.AbiCoder.defaultAbiCoder();
 
   // ABI
   const approveFunction = "function approve(address spender, uint256 value)";
-  //   const depositFunction =
-  //     "function deposit(uint256 assets, uint256 minOutAfterFees, address receiver) external returns (uint256 shares)";
+    const depositFunction =
+      "function deposit(uint256 assets, uint256 minOutAfterFees, address receiver) external returns (uint256 shares)";
 
   const erc20Interface = new ethers.Interface([approveFunction]);
-  //   const defiInterface = new ethers.Interface([depositFunction]);
+    const defiInterface = new ethers.Interface([depositFunction]);
 
   const MAX_UINT256 = ethers.MaxUint256;
 
   const approveCalldata = erc20Interface.encodeFunctionData("approve", [
-    defiVaultAddress,
+    uniswapAddress,
+    MAX_UINT256,
+  ]);
+
+  const approveUmamiCalldata = erc20Interface.encodeFunctionData("approve", [
+    umamiVaultAddress,
     MAX_UINT256,
   ]);
 
@@ -105,22 +111,22 @@ function generateMessageForMulticallHandler(
   ]);
 
   console.log("wet to unwrap", wethToUnwrap);
-  //   const feeRate = BigInt(20); // 0.15% as basis points (15 / 10000)
-  //   const feeDenominator = BigInt(10000); // 100% = 10000 BPS
+    const feeRate = BigInt(20); // 0.15% as basis points (15 / 10000)
+    const feeDenominator = BigInt(10000); // 100% = 10000 BPS
 
-  //   const minOutAfterFees =
-  //     depositAmount - (depositAmount * feeRate) / feeDenominator;
+    // const minOutAfterFees =
+      // depositAmount - (depositAmount * feeRate) / feeDenominator;
 
-  //   console.log("Deposit Amount:", depositAmount.toString());
-  //   console.log("Min Out After Fees:", minOutAfterFees.toString());
+    // console.log("Deposit Amount:", depositAmount.toString());
+    // console.log("Min Out After Fees:", minOutAfterFees.toString());
 
-  //   const ethAmount = ethers.parseEther("0.0005");
-
-  //   const depositCalldata = defiInterface.encodeFunctionData("deposit", [
-  //     depositAmount,
-  //     minOutAfterFees,
-  //     userAddress,
-  //   ]);
+    const depositCallData = defiInterface.encodeFunctionData("deposit", [
+      // try with 0.1 usdc
+      100000,
+      // min after fees
+      0,
+      userAddress,
+    ]);
 
   //instructions
   const instructions = [
@@ -130,29 +136,36 @@ function generateMessageForMulticallHandler(
       callData: approveCalldata,
       value: 0,
     },
-    // swap USDC <> ETH on arb
+    // swap USDC <> WETH on arb from multicallAddress
     {
-      target: defiVaultAddress,
+      target: uniswapAddress,
       callData: callDataSwap,
       value: 0,
     },
-    // unwrap WETH<>ETH
+    // unwrap WETH<>ETH on multicallAddress
     {
       target: WETH_ADDRESS_ARBITRUM,
       callData: unwrapCalldata,
       value: 0,
     },
-    // send ETH to user address
+    // send ETH to user address (TO COMMENT)
+    // {
+    //   target: USER_ADDRESS,
+    //   callData: "0x",
+    //   value: wethToUnwrap,
+    // },
+    // approve Umami
     {
-      target: USER_ADDRESS,
-      callData: "0x",
+      target: depositCurrency,
+      callData: approveUmamiCalldata,
+      value: 0,
+    },
+    // deposit on Umami
+    {
+      target: umamiVaultAddress,
+      callData: depositCallData,
       value: wethToUnwrap,
     },
-    // {
-    //   target: umamiaddress,
-    //   callData: depositCallData,
-    //   value: ethAmount,
-    // },
   ];
 
   return abiCoder.encode(
@@ -186,6 +199,7 @@ async function getSuggestedFees(
   url.searchParams.append("amount", inputAmount.toString());
   url.searchParams.append("recipient", recipient);
 
+  console.log('input amount is', inputAmount)
   if (message) {
     const messageHex = message.startsWith("0x")
       ? message
@@ -193,7 +207,7 @@ async function getSuggestedFees(
     url.searchParams.append("message", messageHex);
   }
 
-  console.log("API URL:", url.toString());
+  // console.log("API URL:", url.toString());
 
   try {
     const response = await fetch(url);
@@ -296,8 +310,8 @@ async function depositUSDCToUmamiOnArb() {
     console.log(`Connected with wallet address: ${userAddress}`);
 
     const decimals = 6; // USDC decimals
-    const depositAmount = ethers.parseUnits("1", decimals);
-    const swapAmount = ethers.parseUnits("0.75", decimals);
+    const depositAmount = ethers.parseUnits("3", decimals);
+    const swapAmount = ethers.parseUnits("1.5", decimals);
     const usdcContract = new ethers.Contract(
       USDC_ADDRESS_BASE,
       ERC20_ABI,
@@ -344,10 +358,11 @@ async function depositUSDCToUmamiOnArb() {
       depositAmount,
       USDC_ADDRESS_ARBITRUM, // Use the deposit usdc address,
       callDataSwap.data,
-      amountToUnwrap
+      amountToUnwrap,
+      UMAMI_WETH_VAULT_ADDRESS_ARB
     );
 
-    console.log("Generated message for fee estimation:", initialMessage);
+    // console.log("Generated message for fee estimation:", initialMessage);
 
     // Get suggested fees
     console.log("Getting suggested fees from Across API...");
@@ -383,7 +398,8 @@ async function depositUSDCToUmamiOnArb() {
       outputAmount, // Use output amount
       USDC_ADDRESS_ARBITRUM, // Use arb USDC address for the deposit on umami
       callDataSwap.data,
-      amountToUnwrap
+      amountToUnwrap,
+      UMAMI_WETH_VAULT_ADDRESS_ARB
     );
 
     console.log("Final message for deposit:", finalMessage);
