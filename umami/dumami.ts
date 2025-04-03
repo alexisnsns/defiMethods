@@ -122,7 +122,7 @@ function generateMessageForMulticallHandler(
 
   const depositCallData = defiInterface.encodeFunctionData("deposit", [
     finalUSDCToDeposit,
-    // min after fees
+    // TODO: min after fees should be calculated, even generously, to avoid max slippage
     0,
     userAddress,
   ]);
