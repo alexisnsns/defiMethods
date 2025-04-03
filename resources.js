@@ -5,9 +5,12 @@ export const USER_ADDRESS = "0xe19c88086C8d551C81ff8a3e2c5DF87a88110a51";
 // CHAINS && MISC
 export const BASE_CHAIN_ID = "8453";
 export const ARBITRUM_CHAIN_ID = "42161";
+export const OPTIMISM_CHAIN_ID = "10";
+
 export const BASE_RPC_URL =
   "https://winter-cool-panorama.base-mainnet.quiknode.pro/95ec67b9fac3ae2356d2e81041d7dc339ebcf16d/";
 export const ARBITRUM_RPC_URL = "https://arb1.arbitrum.io/rpc";
+export const OPTIMISM_RPC_URL = "https://mainnet.optimism.io/";
 
 export const ERC20_ABI = [
   "function balanceOf(address owner) view returns (uint256)",
@@ -47,6 +50,8 @@ export const ACROSS_SPOKEPOOL_ADDRESS_BASE =
   "0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64";
 export const ACROSS_SPOKEPOOL_ADDRESS_ARBITRUM =
   "0xe35e9842fceaca96570b734083f4a58e8f7c5f2a";
+export const ACROSS_SPOKEPOOL_ADDRESS_OPTIMISM =
+  "0x6f26Bf09B1C792e3228e5467807a900A503c0281";
 export const MULTICALL_HANDLER_ADDRESS =
   "0x924a9f036260DdD5808007E1AA95f08eD08aA569";
 export const DEPOSIT_V3_SELECTOR = "0x7b939232";
