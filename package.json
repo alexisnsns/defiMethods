@@ -4,7 +4,7 @@
   "scripts": {
     "testing": "node --loader ts-node/esm test.ts",
     "aave": "node --loader ts-node/esm aaveAPYarb.ts",
-    "dumamibase": "node --loader ts-node/esm umami/dumami.ts",
+    "dumamibase": "node --loader ts-node/esm umami/dumamiBase.ts",
     "dumamiop": "node --loader ts-node/esm umami/dumamiOP.ts",
 
     "wumami": "node --loader ts-node/esm umami/wumami.ts",
