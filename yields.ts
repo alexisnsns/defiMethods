@@ -26,16 +26,15 @@ const fetchUSDCAavePools = async () => {
       .filter(
         (pool: any) =>
           ["Arbitrum", "Base", "Optimism", "Polygon"].includes(pool.chain) &&
-          pool.project === "aave-v3" &&
+          pool.project === "moonwell" &&
           pool.stablecoin === true &&
-          pool.symbol === "USDC" &&
-          pool.tvlUsd > 1_000_000 &&
-          pool.underlyingTokens?.includes(usdcAddresses[pool.chain]) // Ensure correct token address
+          pool.exposure === "single" &&
+          pool.symbol === "USDC"
       )
-      .map(({ chain, apy }) => ({
-        chain,
-        apy: Number(apy).toFixed(2),
-      }))
+      // .map(({ chain, apy }) => ({
+      //   chain,
+      //   apy: Number(apy).toFixed(2),
+      // }))
       .sort((a, b) => Number(b.apy) - Number(a.apy));
 
     console.log("AAVE USDC pools by descending yield:");
@@ -115,5 +114,5 @@ const fetchHarvest = async () => {
 
 // fetchHarvest();
 
-// fetchUSDCAavePools();
+fetchUSDCAavePools();
 // fetchStablePools();
