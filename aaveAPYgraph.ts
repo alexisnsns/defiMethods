@@ -8,7 +8,8 @@ const SUBGRAPH_IDS: Record<string, string> = {
   umami: "QmaP6HkZfzgqVvdVkiRHNy6LJiuQTnkdWmMbuu3Red5J2s",
 };
 
-const API_KEY = "330edf0b5092b89b473b09c68b320748";
+// in the ENV
+const API_KEY = "";
 const RAY = 1e27;
 const SECONDS_PER_YEAR = 31_536_000;
 

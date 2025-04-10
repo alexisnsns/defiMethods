@@ -84,3 +84,19 @@ export const LLAMA_AAVE_ARB_USDC_ID = "d9fa8e14-0447-4207-9ae8-7810199dfa1f";
 export const LLAMA_AAVE_BASE_USDC_ID = "7e0661bf-8cf3-45e6-9424-31916d4c7b84";
 export const LLAMA_AAVE_POL_USDC_ID = "1b8b4cdb-0728-42a8-bf13-2c8fea7427ee";
 export const LLAMA_UMAMI_ARB_USDC_ID = "ac6e0cca-a9cb-42b9-b77c-d0e1b3b4a2f6";
+
+
+// query {
+//   vaultByAddress(
+//     address: "0xc1256Ae5FF1cf2719D4937adb3bbCCab2E00A2Ca"
+//     chainId: 8453  # You need to specify the chainId, such as 1 for Ethereum
+//   ) {
+    
+//     state {
+    
+//       apy
+//       netApy
+//       totalAssets
+//     }
+//   }
+// }
