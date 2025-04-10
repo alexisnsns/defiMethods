@@ -1,62 +1,68 @@
 import axios from "axios";
 // https://github.com/aave/protocol-subgraphs
+const SUBGRAPH_IDS: Record<string, string> = {
+  mainnet: "GQFbb95cE6d8mV989mL5figjaGaKCQB3xqYrr1bRyXqF",
+  arbitrum: "DLuE98kEb5pQNXAcKFQGQgfSQ57Xdou4jnVbAEqMfy3B",
+  optimism: "DSfLz8oQBUeU5atALgUFQKMTSYV9mZAVYp4noLSXAfvb",
+  polygon: "Co2URyXjnxaw8WqxKyVHdirq9Ahhm5vcTs4dMedAq211",
+  umami: "QmaP6HkZfzgqVvdVkiRHNy6LJiuQTnkdWmMbuu3Red5J2s",
+};
 
-const BASE_URL = "QmXZ53Kzz3L2LvvbGve2ebtLKWMhjjB1a3U2jnUj2YwGCW";
-const ARBITRUM_URL = "Qmdn5hAZZj3wmWVuksXHtua3E6aWftCDeTFcW8YQ8Lu6pB";
-const POL_URL = "QmceoHP3ekxJ6JYqAXhqrVgv8rb9WXumrGe1ZhVZah8Ar5";
-const OP_URL = "QmScPH3aFxzFgrie8MMDU4QtFu3CE7nTfsRfSQXiccxBPh";
+const API_KEY = "330edf0b5092b89b473b09c68b320748";
+const RAY = 1e27;
+const SECONDS_PER_YEAR = 31_536_000;
 
-const UMAMI_URL = "QmaP6HkZfzgqVvdVkiRHNy6LJiuQTnkdWmMbuu3Red5J2s";
+const fetchAPYData = async (
+  ticker: string,
+  network: keyof typeof SUBGRAPH_IDS
+) => {
+  const subgraphId = SUBGRAPH_IDS[network];
+  if (!subgraphId) {
+    console.error(`Unknown network: ${network}`);
+    return;
+  }
 
-const SUBGRAPH_URL = `https://api.thegraph.com/subgraphs/id/${UMAMI_URL}`;
-const fetchAPYData = async () => {
+  const SUBGRAPH_URL = `https://gateway.thegraph.com/api/subgraphs/id/${subgraphId}`;
+
   try {
-    console.log("Fetching data...");
+    console.log(`📡 Fetching APY for ${ticker} on ${network}...`);
 
     const query = `
-    {
-      vaultTVLs(first: 5, where: { vault: "0x959f3807f0aa7921e18c78b00b2819ba91e52fef" }) {
-        id
-        vault
-        timestamp
-        tvl
+      {
+        reserveParamsHistoryItems(
+          where: { reserve_: { symbol: "${ticker}" } }
+          orderBy: timestamp
+          orderDirection: desc
+          first: 1
+        ) {
+          liquidityRate
+        }
       }
-    }`;
+    `;
 
-    const response = await axios.post(SUBGRAPH_URL, { query });
-    const data = response.data.data.vaultTVLs;
-    if (data.length < 2) {
-      console.error("Not enough data to calculate APY.");
-      return;
-    }
-
-    // Sort snapshots by timestamp ascending (oldest first)
-    const sortedData = data.sort(
-      (a, b) => parseInt(a.timestamp) - parseInt(b.timestamp)
+    const response = await axios.post(
+      SUBGRAPH_URL,
+      { query },
+      {
+        headers: {
+          Authorization: `Bearer ${API_KEY}`,
+        },
+      }
     );
-    const initialTVL = parseInt(sortedData[0].tvl);
-    const finalTVL = parseInt(sortedData[sortedData.length - 1].tvl);
 
-    // Calculate time difference (in seconds)
-    const timeDifference =
-      parseInt(sortedData[sortedData.length - 1].timestamp) -
-      parseInt(sortedData[0].timestamp);
+    const rayValue =
+      response.data.data.reserveParamsHistoryItems[0]?.liquidityRate;
 
-    // Convert TVL from USDC (6 decimals)
-    const initialTVLInUSDC = initialTVL / 1e6;
-    const finalTVLInUSDC = finalTVL / 1e6;
+    const depositAPR = Number(rayValue) / RAY;
+    const depositAPY =
+      Math.pow(1 + depositAPR / SECONDS_PER_YEAR, SECONDS_PER_YEAR) - 1;
 
-    // Calculate APY from TVL change
-    const growthFactor = finalTVLInUSDC / initialTVLInUSDC;
-    const apy =
-      (Math.pow(growthFactor, (365 * 24 * 60 * 60) / timeDifference) - 1) * 100;
-
-    console.log(`Initial TVL: ${initialTVLInUSDC} USDC`);
-    console.log(`Final TVL: ${finalTVLInUSDC} USDC`);
-    console.log(`Estimated APY: ${apy.toFixed(2)}%`);
+    console.log(
+      `AAVE APY for ${ticker} on ${network}: ${(depositAPY * 100).toFixed(2)}%`
+    );
   } catch (error) {
     console.error("Error fetching data:", error);
   }
 };
 
-fetchAPYData();
+fetchAPYData("LUSD", "optimism");
