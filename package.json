@@ -1,0 +1,38 @@
+{
+  "name": "aavetest",
+  "private": true,
+  "scripts": {
+    "testing": "node --loader ts-node/esm test.ts",
+    "aave": "node --loader ts-node/esm aaveAPYarb.ts",
+    "dumamibase": "node --loader ts-node/esm umami/dumamiBase.ts",
+    "dumamiop": "node --loader ts-node/esm umami/dumamiOP.ts",
+
+    "wumami": "node --loader ts-node/esm umami/wumami.ts",
+    "umamisingle": "node --loader ts-node/esm umamisingle.ts",
+    "paraswap": "node --loader ts-node/esm paraswap.ts",
+    "uniswapquote": "node --loader ts-node/esm uniswapquote.ts",
+    "apyaave": "node --loader ts-node/esm aaveAPYgraph.ts",
+    "apymorpho": "node --loader ts-node/esm morphoAPY.ts",
+    "daave": "node --loader ts-node/esm depositAave.ts",
+    "waave": "node --loader ts-node/esm withdrawAave.ts",
+    "dmorpho": "node --loader ts-node/esm depositMorpho.ts",
+    "wmorpho": "node --loader ts-node/esm withdrawMorpho.ts",
+    "dspectra": "node --loader ts-node/esm depositSpectra.ts",
+    "wspectra": "node --loader ts-node/esm withdrawSpectra.ts",
+    "scurve": "node --loader ts-node/esm curveswap.ts",
+    "yields": "node --loader ts-node/esm yields.ts"
+
+  },
+  "dependencies": {
+    "@uniswap/sdk-core": "^7.7.2",
+    "@uniswap/v3-sdk": "^3.25.2",
+    "axios": "^1.8.3",
+    "bignumber.js": "^9.1.2",
+    "dotenv": "^16.3.1",
+    "ethers": "^6.13.5",
+    "node-fetch": "^3.3.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.2"
+  },
+  "type": "module"
+}
